@@ -2,7 +2,7 @@ package tip.analysis
 
 import tip.ast._
 import tip.solvers._
-import tip.types._
+import tip.types.{FreshVarType, _}
 import tip.ast.AstNodeData._
 import tip.util.{Log, TipProgramException}
 import AstOps._
@@ -101,33 +101,91 @@ class TypeAnalysis(program: AProgram)(implicit declData: DeclarationData) extend
   def visit(node: AstNode, arg: Unit): Unit = {
     log.verb(s"Visiting ${node.getClass.getSimpleName} at ${node.loc}")
     node match {
-      case program: AProgram => ??? // <--- Complete here
-      case _: ANumber => ??? // <--- Complete here
-      case _: AInput => ??? // <--- Complete here
-      case is: AIfStmt => ??? // <--- Complete here
-      case os: AOutputStmt => ??? // <--- Complete here
-      case ws: AWhileStmt => ??? // <--- Complete here
+      case program: AProgram =>
+        for (func <- program.funs)
+          visit(func, arg)
+      case _: ANumber =>
+        unify(node, IntType())
+      case _: AInput =>
+        unify(node, IntType())
+      case is: AIfStmt => // if(E) {S_1} else {S_2} <=> [[E]] = int
+        unify(is.guard, IntType())
+        visit(is.ifBranch, arg)
+        if (is.elseBranch.isDefined)
+          visit(is.elseBranch.get, arg)
+      case os: AOutputStmt => // output E <=> [[E]] = int
+        unify(os.exp, IntType())
+      case ws: AWhileStmt => // while (E) {S} <=> [[E]] = int
+        unify(ws, IntType())
+        visit(ws.innerBlock, arg)
       case as: AAssignStmt =>
         as.left match {
-          case id: AIdentifier => ??? // <--- Complete here
-          case dw: ADerefWrite => ??? // <--- Complete here
-          case dfw: ADirectFieldWrite => ??? // <--- Complete here
-          case ifw: AIndirectFieldWrite => ??? // <--- Complete here
+          case id: AIdentifier => // X = E <=> [[X]] = [[E]]
+            unify(id, as.right)
+          case dw: ADerefWrite => // *X = E <=> [[X]] = &[[E]]
+            unify(dw.exp, PointerType(as.right))
+          case dfw: ADirectFieldWrite =>
+            // Intuition: struct.X = E <=> [[X]] = [[E]]
+            // However, we cannot access struct's field directly from dfw
+            // So we'll re-create struct with all fields having FreshVarType
+            // except for the one changed, which will have [[E]]
+            // And try to unify initial structure with the artificial one:
+            // struct.X = E <=> [[struct]] = &[[ [X |-> E]{struct}]]
+            // Consider {struct} is a type of struct (while 'struct' is actually a pointer)
+
+            val recordExpr = (fieldName: String) => {
+              var typesLst = List[Var[Type]]()
+              for (name <- allFieldNames) // All structs have same fields, so this is legal
+                if (name == fieldName)
+                  typesLst = typesLst :+ VarType(as.right)
+                else typesLst = typesLst :+ FreshVarType()
+              RecordType(typesLst)
+            }
+
+            unify(dfw.id, PointerType(recordExpr(dfw.field))) // dfw.id is a POINTER
+            // Also added test: direct_field_write.tip
+
+          case ifw: AIndirectFieldWrite =>
+            // Same thing as in DirectFieldWrite:
+            // Let structPtr = &struct;
+            // (*structPtr).X = E <=> [[structPtr]] = &&[[ [X |-> E]{struct}]]
+
+            val recordExpr = (fieldName: String) => {
+              var typesLst = List[Var[Type]]()
+              for (name <- allFieldNames)
+                if (name == fieldName)
+                  typesLst = typesLst :+ VarType(as.right)
+                else typesLst = typesLst :+ FreshVarType()
+              RecordType(typesLst)
+            }
+
+            unify(ifw.exp, PointerType(PointerType(recordExpr(ifw.field))))
+            // Also added test: indirect_field_write.tip
         }
       case bin: ABinaryOp =>
         bin.operator match {
-          case Eqq => ??? // <--- Complete here
-          case _ => ??? // <--- Complete here
+          case Eqq => // [[E_1]] = [[E_2]] /\ [[E_1 op E_2]] = int
+            unify(bin.left, bin.right)
+            unify(bin, IntType())
+          case _ => // E_1 op E_2 <=> [[E_1]] = [[E_2]] = [[E_1 op E_2]] = int
+            unify(bin.left, IntType())
+            unify(bin.right, IntType())
+            unify(bin, IntType())
         }
       case un: AUnaryOp =>
         un.operator match {
-          case DerefOp => ??? // <--- Complete here
+          case DerefOp => unify(un.subexp, PointerType(un)) // *E <=> [[E]] = &[[*E]]
         }
-      case alloc: AAlloc => ??? // <--- Complete here
-      case ref: AVarRef => ??? // <--- Complete here
-      case _: ANull => ??? // <--- Complete here
-      case fun: AFunDeclaration => ??? // <--- Complete here
-      case call: ACallFuncExpr => ??? // <--- Complete here
+      case alloc: AAlloc => // alloc <=> [[alloc]] = &alpha, where alpha can be replaced with alloc's expr
+        unify(alloc, PointerType(FreshVarType()))
+      case ref: AVarRef => // &E <=> [[&E]] = &[[E]]
+        unify(ref, PointerType(ref.id))
+      case _: ANull =>
+        unify(node, PointerType(FreshVarType())) // null <=> [[null]] = &alpha
+      case fun: AFunDeclaration => // f(X_1, ..., X_N) { ... return E; } <=> [[f]] = ([[X_1]], ..., [[X_N]]) -> [[E]]
+        unify(fun, FunctionType(fun.params, fun.stmts.ret))
+      case call: ACallFuncExpr => // (E)(E_1, ..., E_N) <=> [[E]] = ([[E_1]], ..., [[E_N]]) -> [[(E)(E_1, ..., E_N)]]
+        unify(FunctionType(call.args, call), call.targetFun)
       case _: AReturnStmt =>
       case rec: ARecord =>
         val fieldmap = rec.fields.foldLeft(Map[String, Term[Type]]()) { (a, b) =>

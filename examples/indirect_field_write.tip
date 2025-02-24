@@ -1,0 +1,9 @@
+main() {
+    var rec, recPtr;
+    rec = alloc {f: 1};
+    recPtr = &rec;
+
+    (*recPtr).field = 123;
+
+    return rec;
+}

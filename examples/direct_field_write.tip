@@ -1,0 +1,8 @@
+main() {
+    var rec, rec2, c;
+    rec = alloc {p: 4, q: 2, w: 8};
+    rec2 = alloc {x: 4, y: 2};
+    rec.p = 123;
+    rec2.p = 123;
+    return rec;
+}
