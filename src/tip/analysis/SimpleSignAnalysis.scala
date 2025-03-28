@@ -85,10 +85,12 @@ class SimpleSignAnalysis(cfg: ProgramCfg)(implicit declData: DeclarationData) ex
       case r: CfgStmtNode =>
         r.data match {
           // var declarations
-          case varr: AVarStmt => ??? //<--- Complete here
+          case varr: AVarStmt => // [[var x]] = JOIN(n)[x → ?]
+            s ++ varr.declIds.map(decl => {decl -> valuelattice.top}).toMap
 
           // assignments
-          case AAssignStmt(id: AIdentifier, right, _) => ??? //<--- Complete here
+          case AAssignStmt(id: AIdentifier, right, _) => // [[x = E]] = JOIN(n)[x → eval(JOIN(n), E)]
+            s + (declData(id) -> eval(right, s))
 
           // all others: like no-ops
           case _ => s
