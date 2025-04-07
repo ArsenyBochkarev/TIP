@@ -116,6 +116,7 @@ object Tip extends App {
         | -reaching          enable reaching definitions analysis
         | -constprop         enable constant propagation analysis
         | -interval          enable interval analysis
+        | -size              enable variable size analysis
         | -copyconstprop     enable copy constant propagation analysis
         | -uninitvars        enable possibly-uninitialized variables analysis
         | -taint             enable taint analysis
@@ -336,7 +337,7 @@ object Tip extends App {
           options.andersen = true
         case "-steensgaard" =>
           options.steensgaard = true
-        case "-sign" | "-livevars" | "-available" | "-vbusy" | "-reaching" | "-constprop" | "-interval" | "-copyconstprop" | "-uninitvars" | "-taint" =>
+        case "-sign" | "-livevars" | "-available" | "-vbusy" | "-reaching" | "-constprop" | "-interval" | "-size" | "-copyconstprop" | "-uninitvars" | "-taint" =>
           options.dfAnalysis += dfa.withName(args(i).drop(1)) -> {
             if (i + 1 < args.length && dfo.values.map(_.toString()).contains(args(i + 1))) {
               i = i + 1

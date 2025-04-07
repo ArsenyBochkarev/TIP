@@ -19,7 +19,7 @@ trait IntervalAnalysisWidening extends ValueAnalysisMisc with Dependencies[CfgNo
   /**
     * Int values occurring in the program, plus -infinity and +infinity.
     */
-  private val B = cfg.nodes.flatMap { n =>
+  val B = cfg.nodes.flatMap { n =>
     n.appearingConstants.map { x =>
       IntNum(x.value): Num
     } + MInf + PInf
@@ -27,15 +27,26 @@ trait IntervalAnalysisWidening extends ValueAnalysisMisc with Dependencies[CfgNo
 
   def loophead(n: CfgNode): Boolean = indep(n).exists(cfg.rank(_) > cfg.rank(n))
 
-  private def minB(b: IntervalLattice.Num) = B.filter(b <= _).min
+  private def minB(b: IntervalLattice.Num) = {
+    val filteredB = B.filter(b <= _)
+    if (filteredB.isEmpty) b else filteredB.min
+  }
 
-  private def maxB(a: IntervalLattice.Num) = B.filter(_ <= a).max
+  private def maxB(a: IntervalLattice.Num) = {
+    val filteredB = B.filter(_ <= a)
+    if (filteredB.isEmpty) a else filteredB.max
+  }
 
   def widenInterval(x: valuelattice.Element, y: valuelattice.Element): valuelattice.Element =
     (x, y) match {
       case (IntervalLattice.EmptyInterval, _) => y
       case (_, IntervalLattice.EmptyInterval) => x
-      case ((l1, h1), (l2, h2)) => ??? //<--- Complete here
+      case ((l1, h1), (l2, h2)) => // let a := min(l1, l2), b := max(h1, h2) in ω([a, b]) = [max{i ∈ B: i <= a}, min{i ∈ B: i >= b}]
+//        (maxB(if (l1 < l2) l1 else l2), minB(if (h1 > h2) h1 else h2))
+        println(s"\n\n\n\n widenInterval, before: ${x.toString()}, ${y.toString()}")
+        val res = (maxB(if (l1 > l2) l2 else l1), minB(if (h1 > h2) h1 else h2))
+        println(s"after: ${res.toString()}\n\n\n\n")
+        res
     }
 
   def widen(x: liftedstatelattice.Element, y: liftedstatelattice.Element): liftedstatelattice.Element =

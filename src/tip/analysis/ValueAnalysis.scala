@@ -69,10 +69,12 @@ trait ValueAnalysisMisc {
       case r: CfgStmtNode =>
         r.data match {
           // var declarations
-          case varr: AVarStmt => ??? //<--- Complete here
+          case varr: AVarStmt => // [[n]] = JOIN(n), however, to support assignments we should map decl to the Top
+            s ++ varr.declIds.map(decl => {decl -> valuelattice.top}).toMap
 
           // assignments
-          case AAssignStmt(id: AIdentifier, right, _) => ??? //<--- Complete here
+          case AAssignStmt(id: AIdentifier, right, _) => // [[x = E]] = JOIN(n)[x -> eval(JOIN(n), E)]
+            s + (declData(id)-> eval(right, s))
 
           // all others: like no-ops
           case _ => s
