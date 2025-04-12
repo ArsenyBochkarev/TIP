@@ -196,3 +196,43 @@ if (flag) {
   close(); // В этой точке можем корректно порепортить ошибку
 }
 ```
+
+
+## Лекция 6
+
+##### Напишите вариант программы, для которой контекстно-чувствительный анализ знаков требует коэффициент `k > 1`
+Коэффициент `k > 1` требуют, например, циклически зависимые друг от друга функции:
+
+```
+int f(int x) {
+  if (x > 5) return x;
+  return g(x + 1);
+}
+
+int g(int x) {
+  if (x > 10) return x;
+  return f(x + 1);
+}
+
+int main() {
+  // ...
+  f(1);
+}
+```
+
+##### Приведите пример решётки, для которой контекстно-чувствительный анализ в функциональном стиле является более ресурсозатратным, чем контекстно-чувствительный анализ по месту вызова с глубиной 2
+- Context sensitivity: `Contexts → lift(States)` (`Contexts` = `ContextInstance → ContextInstanc → ... → ContextInstance` `k` times)
+  - *Пример*: Context sensitivity для анализа знаков с глубиной `k == 2`: `ContextInstance → ContextInstance → lift(Vars → Sign)`
+- Function summary: `States → lift(States)` (`Contexts` = `States`)
+  - *Пример*: Function summary для анализа знаков: `(Vars → Sign) → lift(Vars → Sign)`
+- `ContextInstance` должны быть относительно маленькими
+  - Пусть `ContextInstance` будут текущим знаком, возвращаемым из функции -- `FunctionSign`: на каждой инструкции внутри функции будем в качестве контекста брать знак её возвращаемого значения: ![function_sign_lattice.png](function_sign_lattice.png)
+    - Context sensitivity для анализа знаков с глубиной `k == 2`: `FunctionSign → FunctionSign → lift(States)` (функция из предыдущего `FunctionSign`, текущего `FunctionSign` в `lift(States)`)
+    - Function summary для анализа знаков: `States -> lift(States)` (не поменялся)
+- `States` должен быть относительно большим
+  - Пусть `States` будет функцией из переменной в её знак: `Vars -> Sign`
+    - Context sensitivity для анализа знаков с глубиной `k == 2`: `FunctionSign → FunctionSign → lift(Vars -> Sign)`
+    - Function summary для анализа знаков: `(Vars -> Sign) -> lift(Vars -> Sign)`
+- Lattices sizes:
+  - Context sensitivity для анализа знаков с глубиной `k == 2`: Const * Const * N * Const = O(N)
+  - Function summary для анализа знаков: N * Const * N * Const = O(N^2)
